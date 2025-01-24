@@ -1,5 +1,8 @@
 {
   'target_defaults': {
+    'dependencies': [
+      "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
+    ],
     'conditions': [
       ['OS=="win"', {
         'msvs_configuration_attributes': {
@@ -9,6 +12,8 @@
             'VCCLCompilerTool': {
               'AdditionalOptions': [
                 '/guard:cf',
+                '/w34244',
+                '/we4267',
                 '/ZH:SHA_256'
               ]
             },
@@ -26,9 +31,6 @@
       'targets': [
         {
           'target_name': 'conpty',
-          'include_dirs' : [
-            '<!(node -e "require(\'nan\')")'
-          ],
           'sources' : [
             'src/win/conpty.cc',
             'src/win/path_util.cc'
@@ -39,9 +41,6 @@
         },
         {
           'target_name': 'conpty_console_list',
-          'include_dirs' : [
-            '<!(node -e "require(\'nan\')")'
-          ],
           'sources' : [
             'src/win/conpty_console_list.cc'
           ],
@@ -51,9 +50,6 @@
       'targets': [
         {
           'target_name': 'pty',
-          'include_dirs' : [
-            '<!(node -e "require(\'nan\')")'
-          ],
           'sources': [
             'src/unix/pty.cc',
           ],
@@ -69,11 +65,6 @@
               'libraries!': [
                 '-lutil'
               ]
-            }],
-            ['OS=="mac"', {
-              "xcode_settings": {
-                "MACOSX_DEPLOYMENT_TARGET":"10.7"
-              }
             }]
           ]
         }
