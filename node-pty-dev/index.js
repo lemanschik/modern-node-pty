@@ -5,7 +5,6 @@
  * Copyright (c) 2025, Frank Lemanschik (MIT License).
  */
 import Module from "node:module";
-
 const require = Module.createRequire(import.meta.url);
 
 const terminalCtor =  require(`./esm/${process.platform === 'win32' ? 'windows' : 'unix'}Terminal.js`).default;
