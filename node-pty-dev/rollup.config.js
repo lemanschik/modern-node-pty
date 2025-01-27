@@ -129,8 +129,10 @@ const buildFromSrc = defineConfig({
   }  
 })
 
-// lib === tsc - ./tsconfig.next.json || exit 0
+// tsc -p or -b depending ?
+// lib === tsc -p ./tsconfig.node-pty-next.json || exit 0
 // builds tsc source from node-pty-next (beta 1.1) see: package.json
+// npm i --ignore-scripts --no-save node-pty@latest && npm i --no-save node-pty-next@npm:node-pty@1.1.0-beta27 && node-gyp configure && node-gyp build
 const buildFromLib = defineConfig({
   input: { 
       "unixTerminal": "lib/unixTerminal.js",
