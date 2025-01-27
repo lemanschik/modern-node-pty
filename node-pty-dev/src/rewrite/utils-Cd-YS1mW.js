@@ -1,28 +1,48 @@
+import { EventEmitter } from 'node:events';
+
+/**
+ * Copyright (c) 2019, Microsoft Corporation (MIT License).
+ */
+class EventEmitter2 {
+    _listeners = [];
+    _event;
+    get event() {
+        if (!this._event) {
+            this._event = (listener) => {
+                this._listeners.push(listener);
+                const disposable = {
+                    dispose: () => {
+                        for (let i = 0; i < this._listeners.length; i++) {
+                            if (this._listeners[i] === listener) {
+                                this._listeners.splice(i, 1);
+                                return;
+                            }
+                        }
+                    }
+                };
+                return disposable;
+            };
+        }
+        return this._event;
+    }
+    fire(data) {
+        const queue = [];
+        for (let i = 0; i < this._listeners.length; i++) {
+            queue.push(this._listeners[i]);
+        }
+        for (let i = 0; i < queue.length; i++) {
+            queue[i].call(undefined, data);
+        }
+    }
+}
+
 /**
  * Copyright (c) 2012-2015, Christopher Jeffrey (MIT License)
  * Copyright (c) 2016, Daniel Imms (MIT License).
  * Copyright (c) 2018, Microsoft Corporation (MIT License).
- * Copyright (c) 2025, Frank Lemanschik (MIT License).
  */
-import { EventEmitter } from 'node:events';
-import { TransformStream } from 'node:stream/web';
-
-export const getDisposable = (array, listener) => {
-    array.push(listener);
-    const disposable = {
-        dispose: () => {
-            for (let i = 0; i < array.length; i++) {
-                if (array[i] === listener) {
-                    array.splice(i, 1);
-                    return;
-                }
-            }
-        }
-    };
-    return disposable;
-};
-export const DEFAULT_COLS = 80;
-export const DEFAULT_ROWS = 24;
+const DEFAULT_COLS = 80;
+const DEFAULT_ROWS = 24;
 /**
  * Default messages to indicate PAUSE/RESUME for automatic flow control.
  * To avoid conflicts with rebound XON/XOFF control codes (such as on-my-zsh),
@@ -30,7 +50,7 @@ export const DEFAULT_ROWS = 24;
  */
 const FLOW_CONTROL_PAUSE = '\x13'; // defaults to XOFF
 const FLOW_CONTROL_RESUME = '\x11'; // defaults to XON
-export class Terminal extends TransformStream {
+class Terminal {
     _socket; // HACK: This is unsafe
     _pid = 0;
     _fd = 0;
@@ -45,24 +65,18 @@ export class Terminal extends TransformStream {
     _flowControlPause;
     _flowControlResume;
     handleFlowControl;
-    _onData = [];
-    onData(listener) { 
-        return getDisposable(this._onData,listener);;
-    }
-    _onExit = [];
-    onExit(listener) { 
-        return getDisposable(this._onExit,listener);
-    }
+    _onData = new EventEmitter2();
+    get onData() { return this._onData.event; }
+    _onExit = new EventEmitter2();
+    get onExit() { return this._onExit.event; }
     get pid() { return this._pid; }
     get cols() { return this._cols; }
     get rows() { return this._rows; }
-    constructor(opt={},socket,file,name) {
-        super();
-        this._file = file;
-        this._name = name;
-        this._socket = socket;
+    constructor(opt) {
+        // for 'close'
+        this._internalee = new EventEmitter();
         // setup flow control handling
-        this.handleFlowControl = Boolean(opt?.handleFlowControl);
+        this.handleFlowControl = !!(opt?.handleFlowControl);
         this._flowControlPause = opt?.flowControlPause || FLOW_CONTROL_PAUSE;
         this._flowControlResume = opt?.flowControlResume || FLOW_CONTROL_RESUME;
         if (!opt) {
@@ -92,15 +106,11 @@ export class Terminal extends TransformStream {
             }
         }
         // everything else goes to the real pty
-        this._socket.write(data);
+        this._write(data);
     }
     _forwardEvents() {
-        this.on('data', data => this._onData.forEach(
-            listner=>listner.call(undefined,data)
-        ));
-        this.on('exit', (exitCode, signal) => this._onExit.forEach(
-            listner=>listner.call(undefined,{ exitCode, signal })
-        ));
+        this.on('data', e => this._onData.fire(e));
+        this.on('exit', (exitCode, signal) => this._onExit.fire({ exitCode, signal }));
     }
     _checkType(name, value, type, allowArray = false) {
         if (value === undefined) {
@@ -148,15 +158,16 @@ export class Terminal extends TransformStream {
     addListener(eventName, listener) { this.on(eventName, listener); }
     on(eventName, listener) {
         if (eventName === 'close') {
-            return super.on('close', listener);
+            this._internalee.on('close', listener);
+            return;
         }
         this._socket.on(eventName, listener);
     }
     emit(eventName, ...args) {
         if (eventName === 'close') {
-            return super.emit(arguments);
+            return this._internalee.emit.apply(this._internalee, arguments);
         }
-        this._socket.emit.apply(this._socket, arguments);
+        return this._socket.emit.apply(this._socket, arguments);
     }
     listeners(eventName) {
         return this._socket.listeners(eventName);
@@ -189,3 +200,14 @@ export class Terminal extends TransformStream {
         return pairs;
     }
 }
+
+/**
+ * Copyright (c) 2017, Daniel Imms (MIT License).
+ * Copyright (c) 2018, Microsoft Corporation (MIT License).
+ */
+function assign(target, ...sources) {
+    sources.forEach(source => Object.keys(source).forEach(key => target[key] = source[key]));
+    return target;
+}
+
+export { DEFAULT_COLS as D, EventEmitter2 as E, Terminal as T, DEFAULT_ROWS as a, assign as b };

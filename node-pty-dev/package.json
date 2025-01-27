@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "main": "index.js",
   "scripts": {
-    "preinstall": "npm i --ignore-scripts --no-save node-pty && node-gyp configure && node-gyp build",
+    "preinstall": "npm i --ignore-scripts --no-save node-pty@latest && npm i --no-save node-pty-next@npm:node-pty@1.1.0-beta27 && node-gyp configure && node-gyp build",
     "test": "echo \"Error: no test specified\" && exit 1",
     "postinstall": "tsc -b ./tsconfig.json || exit 0"
   },

@@ -8,13 +8,8 @@ import Module from "node:module";
 
 const require = Module.createRequire(import.meta.url);
 
-let terminalCtor;
-if (process.platform === 'win32') {
-    terminalCtor = require('./esm/windowsTerminal.js').WindowsTerminal;
-}
-else {
-    terminalCtor = require('./esm/unixTerminal.js').UnixTerminal;
-}
+const terminalCtor =  require(`./esm/${process.platform === 'win32' ? 'windows' : 'unix'}Terminal.js`).default;
+
 /**
  * Forks a process as a pseudoterminal.
  * @param file The file to launch.

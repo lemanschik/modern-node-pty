@@ -2,50 +2,69 @@
  * Copyright (c) 2012-2015, Christopher Jeffrey, Peter Sunde (MIT License)
  * Copyright (c) 2016, Daniel Imms (MIT License).
  * Copyright (c) 2018, Microsoft Corporation (MIT License).
+ * Copyright (c) 2019, Frank Lemanschik (MIT License).
  */
-import { Terminal, DEFAULT_COLS, DEFAULT_ROWS } from './terminal';
+import { Terminal, DEFAULT_COLS, DEFAULT_ROWS } from './terminal.js';
 import { WindowsPtyAgent } from './windowsPtyAgent.js';
-
-const DEFAULT_FILE = 'cmd.exe';
-const DEFAULT_NAME = 'Windows Shell';
-export class WindowsTerminal extends Terminal {
+import { _checkType } from './rewrite/util.js';
+import { _useConpty } from './windowsPtyAgent.js';
+const getWindowsTerminal = (...args) => new Promise(resolve=>{
+    return new WindowsTerminal(...args);
+});
+export default class WindowsTerminal extends Terminal {
     _isReady;
     _deferreds;
     _agent;
-    constructor(file, args, opt) {
-        super(opt);
-        this._checkType('args', args, 'string', true);
-        // Initialize arguments
-        args = args || [];
-        file = file || DEFAULT_FILE;
-        opt = opt || {};
-        opt.env = opt.env || process.env;
-        if (opt.encoding) {
+    constructor(
+        file='cmd.exe', 
+        args=[], 
+        {
+            env=process.env,
+            cols=DEFAULT_COLS,
+            rows=DEFAULT_ROWS,
+            cwd=process.cwd(),
+            name="",
+            useDebug=false,
+            useConpty=_useConpty(),
+            useConptyDll=false, // Alternativ bundled dll
+            conptyInheritCursor=false,
+            encoding=""
+        }
+    ) {
+        if (!env) {
+            console.warn("opt.env is needed when calling the constructor");
+        }
+        if (encoding) {
             console.warn('Setting encoding on Windows is not supported');
         }
-        const env = Object.assign({}, opt.env);
-        this._cols = opt.cols || DEFAULT_COLS;
-        this._rows = opt.rows || DEFAULT_ROWS;
-        const cwd = opt.cwd || process.cwd();
-        const name = opt.name || env.TERM || DEFAULT_NAME;
-        const parsedEnv = this._parseEnv(env);
+        _checkType('args', args, 'string', true);
+        const agent = new WindowsPtyAgent(file, args, env, cwd, cols, rows, useDebug, useConpty, useConptyDll, conptyInheritCursor);
+        super(opt, agent.outSocket, file,name || env.TERM || 'Windows Shell');
+        this._file = file;
+        this._name = name || env.TERM || 'Windows Shell';
+        
+        this._cols = cols;
+        this._rows = rows;
+        
         // If the terminal is ready
         this._isReady = false;
         // Functions that need to run after `ready` event is emitted.
         this._deferreds = [];
         // Create new termal.
-        this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.conptyInheritCursor);
-        this._socket = this._agent.outSocket;
+
+        //this._agent = new WindowsPtyAgent(file, args, this._parseEnv(env), cwd, this._cols, this._rows, useDebug, useConpty, useConptyDll, conptyInheritCursor);
+        this._socket = agent.outSocket;
+        this._agent = agent;
         // Not available until `ready` event emitted.
         this._pid = this._agent.innerPid;
         this._fd = this._agent.fd;
         this._pty = this._agent.pty;
         // The forked windows terminal is not available until `ready` event is
         // emitted.
-        this._socket.on('ready_datapipe', () => {
+        this._agent.outSocket.on('ready_datapipe', () => {
             // These events needs to be forwarded.
             ['connect', 'data', 'end', 'timeout', 'drain'].forEach(event => {
-                this._socket.on(event, () => {
+                this._agent.outSocket.on(event, () => {
                     // Wait until the first data event is fired then we can run deferreds.
                     if (!this._isReady && event === 'data') {
                         // Terminal is now ready and we can avoid having to defer method
@@ -65,7 +84,7 @@ export class WindowsTerminal extends Terminal {
                 });
             });
             // Shutdown if `error` event is emitted.
-            this._socket.on('error', err => {
+            this._agent.outSocket.on('error', err => {
                 // Close terminal session.
                 this._close();
                 // EIO, happens when someone closes our child process: the only process
@@ -87,17 +106,19 @@ export class WindowsTerminal extends Terminal {
                 this._close();
             });
         });
-        this._file = file;
-        this._name = name;
+
         this._readable = true;
         this._writable = true;
         this._forwardEvents();
     }
     _write(data) {
-        this._defer(this._doWrite, data);
+        this._defer(
+            // TODO: test and remove this._doWrite
+            this._agent.inSocket.write
+            , data);
     }
     _doWrite(data) {
-        this._agent.inSocket.write(data);
+        //this._agent.inSocket.write(data);
     }
     /**
      * openpty
@@ -109,43 +130,35 @@ export class WindowsTerminal extends Terminal {
      * TTY
      */
     resize(cols, rows) {
-        if (cols <= 0 || rows <= 0 || isNaN(cols) || isNaN(rows) || cols === Infinity || rows === Infinity) {
+        if (
+            cols <= 0 || rows <= 0 || isNaN(cols) || isNaN(rows) || 
+            cols === Infinity || rows === Infinity
+        ) {
             throw new Error('resizing must be done using positive cols and rows');
         }
-        this._deferNoArgs(() => {
+        this._defer(() => {
             this._agent.resize(cols, rows);
             this._cols = cols;
             this._rows = rows;
         });
     }
     clear() {
-        this._deferNoArgs(() => {
+        this._defer(() => {
             this._agent.clear();
         });
     }
     destroy() {
-        this._deferNoArgs(() => {
+        this._defer(() => {
             this.kill();
         });
     }
     kill(signal) {
-        this._deferNoArgs(() => {
+        this._defer(() => {
             if (signal) {
                 throw new Error('Signals not supported on windows.');
             }
             this._close();
             this._agent.kill();
-        });
-    }
-    _deferNoArgs(deferredFn) {
-        // If the terminal is ready, execute.
-        if (this._isReady) {
-            deferredFn.call(this);
-            return;
-        }
-        // Queue until terminal is ready.
-        this._deferreds.push({
-            run: () => deferredFn.call(this)
         });
     }
     _defer(deferredFn, arg) {

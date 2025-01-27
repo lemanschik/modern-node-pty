@@ -5,16 +5,10 @@
  * Copyright (c) 2025, Frank Lemanschik (MIT License).
  */
 import Module from "node:module";
-
 const require = Module.createRequire(import.meta.url);
 
-let terminalCtor;
-if (process.platform === 'win32') {
-    terminalCtor = require('./windowsTerminal.js').WindowsTerminal;
-}
-else {
-    terminalCtor = require('./unixTerminal.js').UnixTerminal;
-}
+const terminalCtor =  require(`./${process.platform === 'win32' ? 'windows' : 'unix'}Terminal.js`).default;
+
 /**
  * Forks a process as a pseudoterminal.
  * @param file The file to launch.

@@ -1,12 +1,14 @@
 import { defineConfig } from "rollup";
 import Module from "node:module";
-
+import { isBuiltin } from 'node:module';
+import 'colors'
 const require = Module.createRequire(import.meta.url);
 /**
  * TODO: Move that in 
  *     "preinstall": "npm i --ignore-scripts --no-save node-pty && node-gyp configure && node-gyp build",
     "test": "echo \"Error: no test specified\" && exit 1",
     "postinstall": "tsc -b ./tsconfig.json || exit 0"
+    "postinstall": "tsc -p ./tsconfig.next.json || exit 0"
  */
 
 // Copy
@@ -17,7 +19,7 @@ const glob = require('glob')
 const globParent = require('glob-parent')
 const name = "RollupPluginCopyGlob";
 
-import('colors')
+
 
 
 const prepareDestination = (from, entry) => {
@@ -67,6 +69,7 @@ const remove = async (from, entry, verbose) => {
 
 const RollupPluginCopyGlob = (paths, { watch = process.env.ROLLUP_WATCH === 'true', verbose = false } = {}) => {
   let once = true
+  console.log("Return ding");
   return {
     name,
     buildStart() {
@@ -95,32 +98,52 @@ const RollupPluginCopyGlob = (paths, { watch = process.env.ROLLUP_WATCH === 'tru
 // src/win
 // src/unix
 const plugins = [
-    // copy([
+  {
+		resolveId( importee="", importer ) {
+			if ( isBuiltin(importee) && !importee.startsWith("node:") ) {
+        return { id: 'node:' + importee, external: true };
+      };
+			// if nothing is returned, we fall back to default resolution
+		}
+	},  
+  RollupPluginCopyGlob([
     // //   { files: 'src/*.{html,css}', dest: 'dist' },
     // //   { files: 'src/config.template', dest: 'dist', rename: 'config.json' },
     // //   { files: 'dev/images/**/*.*', dest: 'dist/images' }
-    // // { files: 'node_modules/node-pty/third_party/conpty/1.20.240626001'}
-    // ], { verbose: true, watch: true })
+    { files: 'node_modules/node-pty-next/third_party/**/*.*', dest: 'package-skel/third_party' },
+    { files: 'node_modules/node-pty-next/src/unix/*.cc', dest: 'package-skel/src/unix' },
+    { files: 'node_modules/node-pty-next/src/win/*.{cc,h}', dest: 'package-skel/src/win' }
+    ], { verbose: true, watch: false })
   ]
-const configs = [defineConfig({
-    input: { 
-        "worker/conoutSocketWorker": "src/worker/conoutSocketWorker.js", 
-        "unixTerminal": "src/unixTerminal.js", 
-        "windowsTerminal": "src/windowsTerminal.js"
-    },
-    plugins,
-    output: {
-        dir: "esm"
-    }  
-}),defineConfig({
+
+
+const buildFromSrc = 
+  defineConfig({
+      input: { 
+          "worker/conoutSocketWorker": "src/worker/conoutSocketWorker.js", 
+          "windowsTerminal": "src/windowsTerminal.js",
+          "unixTerminal": "src/unixTerminal.js"
+      },
+      plugins,
+      output: {
+          dir: "esm"
+      }  
+  })
+
+  const buildFromLib = defineConfig({
     input: { 
         "worker/conoutSocketWorker": "lib/worker/conoutSocketWorker.js",
-         "unixTerminal": "lib/unixTerminal.js",
-         "windowsTerminal": "lib/windowsTerminal.js"
+        "unixTerminal": "lib/unixTerminal.js",
+        "windowsTerminal": "lib/windowsTerminal.js"
     },
     plugins,
     output: {
         dir: "esm-dev"
     }  
-})]
+});
+
+const configs = [
+// buildFromSrc,
+buildFromLib
+]
 export default configs;

@@ -2,15 +2,34 @@
  * Copyright (c) 2020, Microsoft Corporation (MIT License).
  */
 import { Worker } from 'worker_threads';
-import { getWorkerPipeName } from './shared/conout';
+import { getWorkerPipeName } from './shared/conout.js';
 import { join } from 'path';
-import { EventEmitter2 } from './eventEmitter2';
+import { EventEmitter2 } from './eventEmitter2.js';
 /**
  * The amount of time to wait for additional data after the conpty shell process has exited before
  * shutting down the worker and sockets. The timer will be reset if a new data event comes in after
  * the timer has started.
  */
 const FLUSH_DATA_INTERVAL = 1000;
+
+const workerScript = () => import('node:worker_threads').then(({ parentPort, workerData})=>{
+    import('node:net').then(({ Socket, createServer })=>{
+        const conoutPipeName = workerData.conoutPipeName;
+        const conoutSocket = new Socket();
+        conoutSocket.setEncoding('utf8');
+        conoutSocket.connect(conoutPipeName, () => {
+            const server = createServer(workerSocket => {
+                conoutSocket.pipe(workerSocket);
+            });
+            server.listen(conoutPipeName+"-worker");
+            if (!parentPort) {
+                throw new Error('worker_threads parentPort is null');
+            }
+            parentPort.postMessage(1 /* ConoutWorkerMessage.READY */);
+        });        
+    })
+});
+
 /**
  * Connects to and manages the lifecycle of the conout socket. This socket must be drained on
  * another thread in order to avoid deadlocks where Conpty waits for the out socket to drain
@@ -28,22 +47,20 @@ export class ConoutConnection {
     _worker;
     _drainTimeout;
     _isDisposed = false;
-    _onReady = new EventEmitter2();
-    get onReady() { return this._onReady.event; }
-    constructor(_conoutPipeName) {
+    constructor(_conoutPipeName,cb) {
         this._conoutPipeName = _conoutPipeName;
         const workerData = { conoutPipeName: _conoutPipeName };
-        const scriptPath = __dirname.replace('node_modules.asar', 'node_modules.asar.unpacked');
-        this._worker = new Worker(join(scriptPath, 'worker/conoutSocketWorker.js'), { workerData });
-        this._worker.on('message', (message) => {
-            switch (message) {
-                case 1 /* ConoutWorkerMessage.READY */:
-                    this._onReady.fire();
-                    return;
-                default:
-                    console.warn('Unexpected ConoutWorkerMessage', message);
-            }
-        });
+        // const scriptPath = import.meta.dirname.replace('node_modules.asar', 'node_modules.asar.unpacked');
+        this._worker = new Worker(`(${workerScript})()`, { workerData, eval:true });
+        // this._worker.on('message', (message) => {
+        //     switch (message) {
+        //         case 1 /* ConoutWorkerMessage.READY */:
+        //             cb();
+        //             return;
+        //         default:
+        //             console.warn('Unexpected ConoutWorkerMessage', message);
+        //     }
+        // });
     }
     dispose() {
         if (this._isDisposed) {
@@ -53,16 +70,13 @@ export class ConoutConnection {
         // Drain all data from the socket before closing
         this._drainDataAndClose();
     }
-    connectSocket(socket) {
-        socket.connect(getWorkerPipeName(this._conoutPipeName));
-    }
     _drainDataAndClose() {
         if (this._drainTimeout) {
             clearTimeout(this._drainTimeout);
         }
         this._drainTimeout = setTimeout(() => this._destroySocket(), FLUSH_DATA_INTERVAL);
     }
-    async _destroySocket() {
-        await this._worker.terminate();
+    _destroySocket() {
+        return this._worker.terminate();
     }
 }

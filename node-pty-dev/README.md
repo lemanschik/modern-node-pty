@@ -1,4 +1,12 @@
+## Changelog
+replace util assign with object assign
+__dirname import.meta.dirname
+replace !!() with Boolean()
+remove references to winpty in favor of conpty only.
+add createRequire to allow easy nativ module loading.
+
 # pty-dev
+
 Builds the ESM SRC as also nativ stuff
 
 lib folder gets ignored thats a incremental result

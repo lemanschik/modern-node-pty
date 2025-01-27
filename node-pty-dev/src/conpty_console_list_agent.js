@@ -5,6 +5,8 @@
  * called from a different process (child_process.fork) as there can only be a
  * single console attached to a process.
  */
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 let getConsoleProcessList;
 try {
     getConsoleProcessList = require('../build/Release/conpty_console_list.node').getConsoleProcessList;

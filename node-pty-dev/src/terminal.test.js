@@ -3,9 +3,9 @@
  * Copyright (c) 2018, Microsoft Corporation (MIT License).
  */
 import * as assert from 'assert';
-import { WindowsTerminal } from './windowsTerminal';
-import { UnixTerminal } from './unixTerminal';
-import { Terminal } from './terminal';
+import { WindowsTerminal } from './windowsTerminal.js';
+import { UnixTerminal } from './unixTerminal.js';
+import { Terminal } from './terminal.js';
 const terminalConstructor = (process.platform === 'win32') ? WindowsTerminal : UnixTerminal;
 const SHELL = (process.platform === 'win32') ? 'cmd.exe' : '/bin/bash';
 let terminalCtor;

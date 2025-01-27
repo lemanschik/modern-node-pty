@@ -1,0 +1,12 @@
+{ 
+  "name": "node-pty",
+  "version": "1.1.1-esm.0",
+  "type": "module",
+  "gypfile": true,
+  "scripts": {
+    "install": "node-gyp rebuild"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.3.0"
+  }
+}
