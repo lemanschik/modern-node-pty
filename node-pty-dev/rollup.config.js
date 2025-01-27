@@ -117,29 +117,33 @@ const plugins = [
   ]
 
 
-const buildFromSrc = 
-  defineConfig({
-      input: { 
-          "worker/conoutSocketWorker": "src/worker/conoutSocketWorker.js", 
-          "windowsTerminal": "src/windowsTerminal.js",
-          "unixTerminal": "src/unixTerminal.js"
-      },
-      plugins,
-      output: {
-          dir: "esm"
-      }  
-  })
+const buildFromSrc = defineConfig({
+  input: { 
+      "worker/conoutSocketWorker": "src/worker/conoutSocketWorker.js", 
+      "windowsTerminal": "src/windowsTerminal.js",
+      "unixTerminal": "src/unixTerminal.js"
+  },
+  plugins,
+  output: {
+      dir: "esm"
+  }  
+})
 
-  const buildFromLib = defineConfig({
-    input: { 
-        "worker/conoutSocketWorker": "lib/worker/conoutSocketWorker.js",
-        "unixTerminal": "lib/unixTerminal.js",
-        "windowsTerminal": "lib/windowsTerminal.js"
-    },
-    plugins,
-    output: {
-        dir: "esm-dev"
-    }  
+// lib === tsc - ./tsconfig.next.json || exit 0
+// builds tsc source from node-pty-next (beta 1.1) see: package.json
+const buildFromLib = defineConfig({
+  input: { 
+      "unixTerminal": "lib/unixTerminal.js",
+      "windowsTerminal": "lib/windowsTerminal.js",
+      // windowsPtyAgent.js spawns the below files
+      "conpty_console_list_agent": "lib/conpty_console_list_agent.js",
+      // Should get innlined with windowsPtyAgent.js
+      "worker/conoutSocketWorker": "lib/worker/conoutSocketWorker.js",
+  },
+  plugins,
+  output: {
+      dir: "esm-dev"
+  }  
 });
 
 const configs = [
